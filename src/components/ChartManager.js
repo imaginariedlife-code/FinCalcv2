@@ -339,6 +339,236 @@ class ChartManager {
     }
 
     /**
+     * Создание графика сравнения активов
+     * @param {HTMLCanvasElement} canvas - Canvas элемент
+     * @param {Object} detailedProjections - Детальные проекции по активам
+     * @param {string} selectedScenario - Выбранный сценарий
+     * @param {Object} settings - Настройки отображения
+     * @param {Object} portfolio - Портфель для получения названий
+     */
+    createAssetComparisonChart(canvas, detailedProjections, selectedScenario, settings, portfolio) {
+        const chartId = 'asset-comparison';
+
+        console.log('Creating asset comparison chart:', {
+            canvasWidth: canvas.width,
+            canvasHeight: canvas.height,
+            canvasParentHeight: canvas.parentElement?.clientHeight
+        });
+
+        // Уничтожаем существующий график
+        if (this.charts.has(chartId)) {
+            this.charts.get(chartId).destroy();
+        }
+
+        const ctx = canvas.getContext('2d');
+        const data = this.prepareAssetComparisonData(detailedProjections, selectedScenario, settings);
+
+        // Проверяем, что данные не пустые
+        if (!data.labels.length || !data.datasets.length) {
+            console.warn('No data to display in asset comparison chart');
+            return;
+        }
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: data,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Сравнение активов - ${this.getScenarioName(selectedScenario)} сценарий`,
+                        font: {
+                            size: 16,
+                            weight: 'bold'
+                        }
+                    },
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        cornerRadius: 8,
+                        callbacks: {
+                            label: (context) => {
+                                const value = context.parsed.y;
+                                const valueType = settings.showRealValues ? 'реальных' : 'номинальных';
+                                return `${context.dataset.label}: ${this.formatCurrency(value)} (${valueType})`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Годы',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: settings.showRealValues ? 'Стоимость (реальные значения)' : 'Стоимость (номинальные значения)',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            callback: (value) => this.formatCurrency(value),
+                            font: {
+                                size: 12
+                            }
+                        },
+                        beginAtZero: false
+                    }
+                },
+                elements: {
+                    line: {
+                        tension: 0.1,
+                        borderWidth: 2
+                    },
+                    point: {
+                        radius: 4,
+                        hoverRadius: 6
+                    }
+                }
+            }
+        });
+
+        this.charts.set(chartId, chart);
+        console.log('Asset comparison chart created');
+        return chart;
+    }
+
+    /**
+     * Подготовка данных для графика сравнения активов
+     * @param {Object} detailedProjections - Детальные проекции
+     * @param {string} selectedScenario - Выбранный сценарий
+     * @param {Object} settings - Настройки
+     * @returns {Object} Данные для Chart.js
+     */
+    prepareAssetComparisonData(detailedProjections, selectedScenario, settings) {
+        const labels = [];
+        const datasets = [];
+
+        console.log('Preparing asset comparison data:', {
+            selectedScenario,
+            assetsCount: Object.keys(detailedProjections.assets || {}).length,
+            showRealValues: settings.showRealValues
+        });
+
+        // Создаем лейблы (годы)
+        if (detailedProjections.assets && Object.keys(detailedProjections.assets).length > 0) {
+            const firstAsset = Object.values(detailedProjections.assets)[0];
+            if (firstAsset[selectedScenario]) {
+                labels.push(...firstAsset[selectedScenario].map(item => item.year));
+                console.log('Chart labels (years):', labels);
+            }
+        }
+
+        // Добавляем линии для каждого актива
+        Object.entries(detailedProjections.assets).forEach(([assetId, assetData]) => {
+            const scenarioData = assetData[selectedScenario] || [];
+            const color = this.colors[assetData.type] || '#64748b';
+            const dataValues = scenarioData.map(item => settings.showRealValues ? item.real : item.nominal);
+
+            console.log(`Asset ${assetData.name} data:`, {
+                color,
+                dataLength: dataValues.length,
+                firstValue: dataValues[0],
+                lastValue: dataValues[dataValues.length - 1]
+            });
+
+            datasets.push({
+                label: assetData.name,
+                data: dataValues,
+                borderColor: color,
+                backgroundColor: color + '20',
+                fill: false,
+                tension: 0.1
+            });
+        });
+
+        // Добавляем линию для обязательств (если есть)
+        if (detailedProjections.liabilities && detailedProjections.liabilities[selectedScenario]) {
+            const liabilityData = detailedProjections.liabilities[selectedScenario];
+            if (liabilityData.some(item => item.value > 0)) {
+                datasets.push({
+                    label: 'Обязательства',
+                    data: liabilityData.map(item => -item.value), // Отрицательные значения
+                    borderColor: '#dc2626',
+                    backgroundColor: '#dc262620',
+                    fill: false,
+                    tension: 0.1,
+                    borderDash: [5, 5] // Пунктирная линия
+                });
+            }
+        }
+
+        console.log('Final chart data:', { labels, datasetsCount: datasets.length });
+        return { labels, datasets };
+    }
+
+    /**
+     * Получение названия сценария
+     * @param {string} scenario - Код сценария
+     * @returns {string} Название сценария
+     */
+    getScenarioName(scenario) {
+        const names = {
+            'pessimistic': 'Пессимистичный',
+            'base': 'Базовый',
+            'optimistic': 'Оптимистичный'
+        };
+        return names[scenario] || scenario;
+    }
+
+    /**
+     * Форматирование валютных значений
+     * @param {number} value - Значение
+     * @returns {string} Отформатированная строка
+     */
+    formatCurrency(value) {
+        return new Intl.NumberFormat('ru-RU', {
+            style: 'currency',
+            currency: 'RUB',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(value);
+    }
+
+    /**
      * Изменение размера всех графиков
      */
     resize() {
@@ -350,6 +580,13 @@ class ChartManager {
 
 // Создаем глобальный экземпляр
 window.chartManager = new ChartManager();
+
+// Проверяем, что все методы доступны
+console.log('ChartManager methods available:', {
+    createScenariosChart: typeof window.chartManager.createScenariosChart,
+    createCompositionChart: typeof window.chartManager.createCompositionChart,
+    createAssetComparisonChart: typeof window.chartManager.createAssetComparisonChart
+});
 
 // Экспортируем класс
 window.ChartManager = ChartManager;

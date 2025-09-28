@@ -224,24 +224,156 @@
                         </div>
                     </div>
 
-                    <!-- Charts -->
-                    <div class="card chart-card">
+                    <!-- Tab Switcher -->
+                    <div class="tab-switcher">
+                        <button
+                            @click="switchTab('portfolio')"
+                            :class="{ 'active': activeTab === 'portfolio' }"
+                            class="tab-button">
+                            Портфель в целом
+                        </button>
+                        <button
+                            @click="switchTab('assets')"
+                            :class="{ 'active': activeTab === 'assets' }"
+                            class="tab-button"
+                            :disabled="portfolio.assets.length === 0">
+                            Детально по активам
+                        </button>
+                    </div>
+
+                    <!-- Portfolio Overview Tab -->
+                    <div x-show="activeTab === 'portfolio'" class="tab-content">
+                        <!-- Charts -->
+                        <div class="card chart-card">
                         <div class="card-header">
                             <h3>Прогноз развития</h3>
                             <div class="chart-controls">
                                 <label>
-                                    <input type="radio" name="chartType" value="scenarios" x-model="chartType">
+                                    <input type="radio" name="chartType" value="scenarios" x-model="chartType" @change="updateCharts()" checked>
                                     Сценарии
-                                </label>
-                                <label>
-                                    <input type="radio" name="chartType" value="composition" x-model="chartType">
-                                    Состав
                                 </label>
                             </div>
                         </div>
                         <div class="card-body">
                             <div class="chart-container">
                                 <canvas x-ref="mainChart"></canvas>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+
+                    <!-- Asset Comparison Tab -->
+                    <div x-show="activeTab === 'assets'" class="tab-content">
+                        <!-- Scenario Selector -->
+                        <div class="card asset-comparison-chart">
+                            <div class="card-header">
+                                <h3>Сравнение активов</h3>
+                                <div class="scenario-selector">
+                                    <button
+                                        @click="selectScenario('pessimistic')"
+                                        :class="{ 'active': selectedScenario === 'pessimistic' }"
+                                        class="scenario-button pessimistic">
+                                        Пессимистичный
+                                    </button>
+                                    <button
+                                        @click="selectScenario('base')"
+                                        :class="{ 'active': selectedScenario === 'base' }"
+                                        class="scenario-button base">
+                                        Базовый
+                                    </button>
+                                    <button
+                                        @click="selectScenario('optimistic')"
+                                        :class="{ 'active': selectedScenario === 'optimistic' }"
+                                        class="scenario-button optimistic">
+                                        Оптимистичный
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas x-ref="assetChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Asset Comparison Table -->
+                        <div class="card" x-show="Object.keys(detailedProjections.assets).length > 0">
+                            <div class="card-header">
+                                <h3>Детальные расчеты по активам</h3>
+                                <div class="table-controls">
+                                    <label>
+                                        <input type="checkbox" x-model="settings.showRealValues" @change="updateSettings('showRealValues', settings.showRealValues); updateAssetChart()">
+                                        Показать реальные значения
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <!-- Desktop Table -->
+                                <div class="table-container">
+                                    <table class="calculations-table asset-comparison-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Год</th>
+                                                <template x-for="(asset, assetId) in detailedProjections.assets" :key="assetId">
+                                                    <th x-text="asset.name" :class="`asset-${asset.type}`"></th>
+                                                </template>
+                                                <th x-show="portfolio.liabilities && portfolio.liabilities.length > 0" class="liability-column">Обязательства</th>
+                                                <th class="total-column">Чистая стоимость</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="year in Array.from({length: settings.horizonYears + 1}, (_, i) => i)" :key="year">
+                                                <tr>
+                                                    <td x-text="year" class="year-column"></td>
+                                                    <template x-for="(asset, assetId) in detailedProjections.assets" :key="assetId">
+                                                        <td x-text="formatCurrency(getAssetValueForYear(asset, selectedScenario, year))" :class="`asset-${asset.type}`"></td>
+                                                    </template>
+                                                    <td x-show="portfolio.liabilities && portfolio.liabilities.length > 0"
+                                                        x-text="formatCurrency(getLiabilityValueForYear(year))"
+                                                        class="liability-column text-danger"></td>
+                                                    <td x-text="formatCurrency(getNetWorthForYear(year))"
+                                                        class="total-column"
+                                                        :class="getNetWorthForYear(year) >= 0 ? 'text-success' : 'text-danger'"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Mobile Cards -->
+                                <div class="mobile-asset-cards">
+                                    <template x-for="year in Array.from({length: showAllMobileYears ? settings.horizonYears + 1 : Math.min(settings.horizonYears + 1, 6)}, (_, i) => i)" :key="year">
+                                        <div class="mobile-year-card">
+                                            <div class="mobile-year-header">
+                                                <span x-text="`Год ${year}`"></span>
+                                            </div>
+                                            <div class="mobile-asset-grid">
+                                                <template x-for="(asset, assetId) in detailedProjections.assets" :key="assetId">
+                                                    <div class="mobile-asset-item" :class="asset.type">
+                                                        <div class="mobile-asset-name" x-text="asset.name"></div>
+                                                        <div class="mobile-asset-value" x-text="formatCurrency(getAssetValueForYear(asset, selectedScenario, year))"></div>
+                                                    </div>
+                                                </template>
+                                                <div x-show="portfolio.liabilities && portfolio.liabilities.length > 0" class="mobile-asset-item liability">
+                                                    <div class="mobile-asset-name">Обязательства</div>
+                                                    <div class="mobile-asset-value" x-text="formatCurrency(getLiabilityValueForYear(year))"></div>
+                                                </div>
+                                                <div class="mobile-asset-item total">
+                                                    <div class="mobile-asset-name">Чистая стоимость</div>
+                                                    <div class="mobile-asset-value" x-text="formatCurrency(getNetWorthForYear(year))"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- Show more button for mobile -->
+                                    <div x-show="settings.horizonYears > 5" class="text-center" style="margin-top: 1rem;">
+                                        <button @click="showAllMobileYears = !showAllMobileYears" class="btn btn-secondary">
+                                            <span x-show="!showAllMobileYears">Показать все годы</span>
+                                            <span x-show="showAllMobileYears">Показать меньше</span>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

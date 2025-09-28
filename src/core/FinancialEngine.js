@@ -470,10 +470,168 @@ class FinancialEngine {
             debtToAssetsRatio: currentAssets > 0 ? (currentLiabilities / currentAssets) * 100 : 0
         };
     }
+
+    /**
+     * Расчет детальных проекций по каждому активу
+     * @param {Object} portfolio - Портфель активов и обязательств
+     * @param {Object} scenarios - Сценарии доходности
+     * @param {Object} settings - Настройки расчета
+     * @returns {Object} Детализированные проекции по активам и обязательствам
+     */
+    calculateDetailedProjections(portfolio, scenarios, settings) {
+        console.log('FinancialEngine: Calculating detailed projections');
+
+        const result = {
+            assets: {},
+            liabilities: {
+                pessimistic: [],
+                base: [],
+                optimistic: []
+            }
+        };
+
+        // Расчет по каждому активу
+        if (portfolio.assets && portfolio.assets.length > 0) {
+            console.log('Processing assets:', portfolio.assets.length);
+            portfolio.assets.forEach((asset, index) => {
+                const assetId = asset.id || `asset_${index}`;
+                console.log(`Processing asset ${index}:`, asset);
+
+                result.assets[assetId] = {
+                    name: asset.name || `Актив ${index + 1}`,
+                    type: asset.type,
+                    value: asset.value || 0,
+                    pessimistic: this.calculateAssetProjection(asset, scenarios, 'pessimistic', settings),
+                    base: this.calculateAssetProjection(asset, scenarios, 'base', settings),
+                    optimistic: this.calculateAssetProjection(asset, scenarios, 'optimistic', settings)
+                };
+
+                console.log(`Asset ${assetId} projections:`, result.assets[assetId]);
+            });
+        }
+
+        // Расчет проекций обязательств
+        if (portfolio.liabilities && portfolio.liabilities.length > 0) {
+            // Обязательства одинаковы во всех сценариях (зависят только от времени)
+            const liabilityProjections = this.calculateLiabilitiesProjection(portfolio.liabilities, settings);
+            result.liabilities.pessimistic = liabilityProjections;
+            result.liabilities.base = liabilityProjections;
+            result.liabilities.optimistic = liabilityProjections;
+        } else {
+            // Пустые массивы если нет обязательств
+            for (let year = 0; year <= settings.horizonYears; year++) {
+                const yearData = { year, value: 0 };
+                result.liabilities.pessimistic.push(yearData);
+                result.liabilities.base.push(yearData);
+                result.liabilities.optimistic.push(yearData);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Расчет проекции для отдельного актива
+     * @param {Object} asset - Актив
+     * @param {Object} scenarios - Сценарии доходности
+     * @param {string} scenarioType - Тип сценария
+     * @param {Object} settings - Настройки
+     * @returns {Array} Проекция актива по годам
+     */
+    calculateAssetProjection(asset, scenarios, scenarioType, settings) {
+        const projection = [];
+        const returnRate = (scenarios.returnRates[asset.type]?.[scenarioType] || 0) / 100;
+        const inflationRate = settings.inflation / 100;
+
+        let currentValue = asset.value || 0;
+
+        for (let year = 0; year <= settings.horizonYears; year++) {
+            const nominalValue = year === 0 ? currentValue : currentValue * Math.pow(1 + returnRate, year);
+            const realValue = nominalValue / Math.pow(1 + inflationRate, year);
+
+            projection.push({
+                year,
+                nominal: Math.round(nominalValue),
+                real: Math.round(realValue),
+                value: settings.showRealValues ? realValue : nominalValue
+            });
+        }
+
+        return projection;
+    }
+
+    /**
+     * Расчет проекции обязательств
+     * @param {Array} liabilities - Массив обязательств
+     * @param {Object} settings - Настройки
+     * @returns {Array} Проекция обязательств по годам
+     */
+    calculateLiabilitiesProjection(liabilities, settings) {
+        const projection = [];
+
+        for (let year = 0; year <= settings.horizonYears; year++) {
+            let totalLiabilities = 0;
+
+            liabilities.forEach(liability => {
+                const yearsPassed = year;
+                const monthsPassed = yearsPassed * 12;
+                const totalMonths = liability.termYears * 12;
+
+                if (monthsPassed < totalMonths) {
+                    // Рассчитываем остаток долга
+                    const monthlyRate = liability.rate / 100 / 12;
+                    const remainingBalance = this.calculateRemainingBalance(
+                        liability.principal,
+                        monthlyRate,
+                        totalMonths,
+                        monthsPassed
+                    );
+                    totalLiabilities += remainingBalance;
+                }
+            });
+
+            projection.push({
+                year,
+                value: Math.round(totalLiabilities)
+            });
+        }
+
+        return projection;
+    }
+
+    /**
+     * Расчет остатка долга по аннуитетной формуле
+     * @param {number} principal - Основная сумма
+     * @param {number} monthlyRate - Месячная ставка
+     * @param {number} totalMonths - Общее количество месяцев
+     * @param {number} paidMonths - Количество оплаченных месяцев
+     * @returns {number} Остаток долга
+     */
+    calculateRemainingBalance(principal, monthlyRate, totalMonths, paidMonths) {
+        if (monthlyRate === 0) {
+            return principal * (1 - paidMonths / totalMonths);
+        }
+
+        const monthlyPayment = principal *
+            (monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) /
+            (Math.pow(1 + monthlyRate, totalMonths) - 1);
+
+        const remainingBalance = principal * Math.pow(1 + monthlyRate, paidMonths) -
+            monthlyPayment * (Math.pow(1 + monthlyRate, paidMonths) - 1) / monthlyRate;
+
+        return Math.max(0, remainingBalance);
+    }
 }
 
 // Создаем глобальный экземпляр
 window.financialEngine = new FinancialEngine();
+
+// Проверяем, что все методы доступны
+console.log('FinancialEngine methods available:', {
+    calculateProjections: typeof window.financialEngine.calculateProjections,
+    calculateDetailedProjections: typeof window.financialEngine.calculateDetailedProjections,
+    calculateMetrics: typeof window.financialEngine.calculateMetrics
+});
 
 // Экспортируем класс
 window.FinancialEngine = FinancialEngine;

@@ -7,6 +7,9 @@ function finCalcApp() {
         // Состояние приложения
         isLoading: true,
         chartType: 'scenarios',
+        activeTab: 'portfolio', // 'portfolio' | 'assets'
+        selectedScenario: 'base', // 'pessimistic' | 'base' | 'optimistic'
+        showAllMobileYears: false, // Для мобильного отображения всех лет
         showAddAsset: false,
         showAddLiability: false,
         showSettings: false,
@@ -49,11 +52,26 @@ function finCalcApp() {
             riskScore: 1
         },
 
+        // Детальные проекции по активам
+        detailedProjections: {
+            assets: {},
+            liabilities: {
+                pessimistic: [],
+                base: [],
+                optimistic: []
+            }
+        },
+
         // Инициализация приложения
         async init() {
             console.log('🚀 Initializing FinCalc 2.0...');
 
             try {
+                // Проверяем доступность необходимых методов
+                console.log('Checking method availability...');
+                console.log('financialEngine.calculateDetailedProjections:', typeof financialEngine?.calculateDetailedProjections);
+                console.log('chartManager.createAssetComparisonChart:', typeof chartManager?.createAssetComparisonChart);
+
                 // Загружаем данные
                 await this.loadData();
 
@@ -178,18 +196,12 @@ function finCalcApp() {
 
                 console.log('Chart element found, updating...');
                 try {
-                    if (this.chartType === 'scenarios') {
-                        chartManager.createScenariosChart(
-                            chartElement,
-                            this.projections,
-                            this.settings
-                        );
-                    } else if (this.chartType === 'composition') {
-                        chartManager.createCompositionChart(
-                            chartElement,
-                            this.portfolio
-                        );
-                    }
+                    // Always show scenarios chart
+                    chartManager.createScenariosChart(
+                        chartElement,
+                        this.projections,
+                        this.settings
+                    );
                     console.log('Chart updated successfully');
                 } catch (error) {
                     console.error('Error updating charts:', error);
@@ -565,6 +577,111 @@ function finCalcApp() {
             this.saveData();
         },
 
+        // Tab и Scenario управление
+        switchTab(tabName) {
+            console.log('Switching to tab:', tabName);
+            this.activeTab = tabName;
+
+            if (tabName === 'assets') {
+                this.calculateDetailedProjections();
+                this.updateAssetChart();
+            } else {
+                this.updateCharts();
+            }
+
+            this.saveData();
+        },
+
+        selectScenario(scenario) {
+            console.log('Selecting scenario:', scenario);
+            this.selectedScenario = scenario;
+            this.updateAssetChart();
+            this.saveData();
+        },
+
+        calculateDetailedProjections() {
+            console.log('Calculating detailed projections...');
+
+            if (!this.portfolio.assets || this.portfolio.assets.length === 0) {
+                console.log('No assets found, setting empty projections');
+                this.detailedProjections = { assets: {}, liabilities: { pessimistic: [], base: [], optimistic: [] } };
+                return;
+            }
+
+            try {
+                if (typeof financialEngine.calculateDetailedProjections === 'function') {
+                    this.detailedProjections = financialEngine.calculateDetailedProjections(
+                        this.portfolio,
+                        this.scenarios,
+                        this.settings
+                    );
+                    console.log('Detailed projections calculated successfully. Assets:', Object.keys(this.detailedProjections.assets).length);
+                } else {
+                    console.error('calculateDetailedProjections method not found on financialEngine');
+                    this.detailedProjections = { assets: {}, liabilities: { pessimistic: [], base: [], optimistic: [] } };
+                }
+            } catch (error) {
+                console.error('Error calculating detailed projections:', error);
+                this.detailedProjections = { assets: {}, liabilities: { pessimistic: [], base: [], optimistic: [] } };
+            }
+        },
+
+        updateAssetChart() {
+            console.log('Updating asset comparison chart...');
+            this.$nextTick(() => {
+                const chartElement = this.$refs.assetChart || document.querySelector('canvas[x-ref="assetChart"]');
+
+                if (chartElement && this.detailedProjections.assets && Object.keys(this.detailedProjections.assets).length > 0) {
+                    try {
+                        if (typeof chartManager.createAssetComparisonChart === 'function') {
+                            chartManager.createAssetComparisonChart(
+                                chartElement,
+                                this.detailedProjections,
+                                this.selectedScenario,
+                                this.settings,
+                                this.portfolio
+                            );
+                            console.log('Asset chart updated successfully');
+                        } else {
+                            console.error('createAssetComparisonChart method not found on chartManager');
+                        }
+                    } catch (error) {
+                        console.error('Error updating asset chart:', error);
+                    }
+                } else {
+                    console.log('Missing requirements - chartElement:', !!chartElement, 'assets:', Object.keys(this.detailedProjections.assets || {}).length);
+                }
+            });
+        },
+
+        // Helper methods для asset comparison table
+        getAssetValueForYear(asset, scenario, year) {
+            const data = asset[scenario];
+            if (!data || !data[year]) return 0;
+            return this.settings.showRealValues ? data[year].real : data[year].nominal;
+        },
+
+        getLiabilityValueForYear(year) {
+            const data = this.detailedProjections.liabilities[this.selectedScenario];
+            if (!data || !data[year]) return 0;
+            return data[year].value;
+        },
+
+        getNetWorthForYear(year) {
+            let totalAssets = 0;
+            let totalLiabilities = 0;
+
+            // Суммируем все активы
+            Object.values(this.detailedProjections.assets).forEach(asset => {
+                totalAssets += this.getAssetValueForYear(asset, this.selectedScenario, year);
+            });
+
+            // Вычитаем обязательства
+            totalLiabilities = this.getLiabilityValueForYear(year);
+
+            return totalAssets - totalLiabilities;
+        },
+
         // Watchers для автоматического пересчета
         $watch: {
             'portfolio.assets': {
@@ -601,9 +718,6 @@ function finCalcApp() {
                 this.saveData();
             },
 
-            'chartType'() {
-                this.updateCharts();
-            }
         }
     };
 }
