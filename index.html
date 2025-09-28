@@ -224,22 +224,27 @@
                         </div>
                     </div>
 
-                    <!-- Tab Switcher -->
-                    <div class="tab-switcher">
-                        <button
-                            @click="switchTab('portfolio')"
-                            :class="{ 'active': activeTab === 'portfolio' }"
-                            class="tab-button">
-                            Портфель в целом
-                        </button>
-                        <button
-                            @click="switchTab('assets')"
-                            :class="{ 'active': activeTab === 'assets' }"
-                            class="tab-button"
-                            :disabled="portfolio.assets.length === 0">
-                            Детально по активам
-                        </button>
-                    </div>
+                </div>
+
+                <!-- Analytics Section Tab Switcher -->
+                <div class="tab-switcher">
+                    <button
+                        @click="switchTab('portfolio')"
+                        :class="{ 'active': activeTab === 'portfolio' }"
+                        class="tab-button">
+                        Портфель в целом
+                    </button>
+                    <button
+                        @click="switchTab('assets')"
+                        :class="{ 'active': activeTab === 'assets' }"
+                        class="tab-button"
+                        :disabled="portfolio.assets.length === 0">
+                        Детально по активам
+                    </button>
+                </div>
+
+                <!-- Analytics Content -->
+                <div class="analytics-content">
 
                     <!-- Portfolio Overview Tab -->
                     <div x-show="activeTab === 'portfolio'" class="tab-content">

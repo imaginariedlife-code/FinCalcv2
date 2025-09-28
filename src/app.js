@@ -286,6 +286,12 @@ function finCalcApp() {
                 const newAsset = assetClasses.createDefaultAsset(assetType, 0);
                 this.portfolio.assets.push(newAsset);
 
+                // Если находимся на вкладке активов, пересчитываем детальные проекции
+                if (this.activeTab === 'assets') {
+                    this.calculateDetailedProjections();
+                    this.updateAssetChart();
+                }
+
                 eventBus.emit('portfolio:changed', this.portfolio);
 
                 // Фокусируемся на поле стоимости нового актива
@@ -303,6 +309,13 @@ function finCalcApp() {
         removeAsset(index) {
             if (index >= 0 && index < this.portfolio.assets.length) {
                 this.portfolio.assets.splice(index, 1);
+
+                // Если находимся на вкладке активов, пересчитываем детальные проекции
+                if (this.activeTab === 'assets') {
+                    this.calculateDetailedProjections();
+                    this.updateAssetChart();
+                }
+
                 eventBus.emit('portfolio:changed', this.portfolio);
             }
         },
@@ -327,6 +340,12 @@ function finCalcApp() {
                 // Принудительно обновляем графики
                 this.$nextTick(() => {
                     this.updateCharts();
+
+                    // Если находимся на вкладке активов, пересчитываем детальные проекции
+                    if (this.activeTab === 'assets') {
+                        this.calculateDetailedProjections();
+                        this.updateAssetChart();
+                    }
                 });
 
                 this.saveData();
@@ -362,6 +381,12 @@ function finCalcApp() {
                 this.$nextTick(() => {
                     console.log('Updating charts...');
                     this.updateCharts();
+
+                    // Если находимся на вкладке активов, пересчитываем детальные проекции
+                    if (this.activeTab === 'assets') {
+                        this.calculateDetailedProjections();
+                        this.updateAssetChart();
+                    }
                 });
 
                 this.saveData();
@@ -413,6 +438,12 @@ function finCalcApp() {
                 // Принудительно обновляем графики
                 this.$nextTick(() => {
                     this.updateCharts();
+
+                    // Если находимся на вкладке активов, нужно пересчитать детальные проекции
+                    if (this.activeTab === 'assets') {
+                        this.calculateDetailedProjections();
+                        this.updateAssetChart();
+                    }
                 });
 
                 this.saveData();
@@ -534,6 +565,13 @@ function finCalcApp() {
                 this.portfolio.assets[index][field] = value;
                 this.updatePortfolioValue();
                 this.calculate();
+
+                // Если находимся на вкладке активов, нужно пересчитать детальные проекции
+                if (this.activeTab === 'assets') {
+                    this.calculateDetailedProjections();
+                    this.updateAssetChart();
+                }
+
                 this.saveData();
             }
         },
@@ -548,10 +586,19 @@ function finCalcApp() {
             } else if (field === 'showRealValues') {
                 // При изменении режима отображения нужно только обновить графики
                 this.updateCharts();
+                // Если находимся на вкладке активов, обновляем и график активов
+                if (this.activeTab === 'assets') {
+                    this.updateAssetChart();
+                }
             } else {
                 // Для остальных полей (horizonYears) нужен полный пересчет
                 this.calculate();
                 this.updateCharts();
+                // Если находимся на вкладке активов, пересчитываем детальные проекции
+                if (this.activeTab === 'assets') {
+                    this.calculateDetailedProjections();
+                    this.updateAssetChart();
+                }
             }
 
             this.saveData();
@@ -574,6 +621,13 @@ function finCalcApp() {
 
             this.calculate();
             this.updateCharts();
+
+            // Если находимся на вкладке активов, пересчитываем детальные проекции
+            if (this.activeTab === 'assets') {
+                this.calculateDetailedProjections();
+                this.updateAssetChart();
+            }
+
             this.saveData();
         },
 

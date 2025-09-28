@@ -1770,11 +1770,13 @@ hr {
 .tab-switcher {
     display: flex;
     gap: 0.5rem;
-    margin-bottom: 1.5rem;
+    margin: 2rem 0 1.5rem 0;
     background: var(--background);
     padding: 0.5rem;
     border-radius: 8px;
     border: 1px solid var(--border);
+    width: 100%;
+    max-width: 400px;
 }
 
 .tab-button {
@@ -1787,6 +1789,9 @@ hr {
     transition: all 0.2s ease;
     font-weight: 500;
     color: var(--text-secondary);
+    white-space: nowrap;
+    height: auto;
+    min-height: unset;
 }
 
 .tab-button:hover {
@@ -1908,8 +1913,10 @@ hr {
 /* Mobile responsiveness for tabs and scenarios */
 @media (max-width: 768px) {
     .tab-switcher {
-        flex-direction: column;
+        flex-direction: row;
         gap: 0.25rem;
+        margin: 1.5rem 0 1rem 0;
+        max-width: 100%;
     }
 
     .tab-button {
